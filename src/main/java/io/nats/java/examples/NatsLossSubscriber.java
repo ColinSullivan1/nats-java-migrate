@@ -44,19 +44,12 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
     private String server;
     private String subject;
     private Connection conn;
+    private Object connLock = new Object();
     private int pubCount = 0;
     AtomicInteger count = new AtomicInteger();
 
     CountDownLatch startLatch = new CountDownLatch(1);
     CountDownLatch stopLatch = new CountDownLatch(1);
-
-    private synchronized void setConnection(Connection c) {
-        conn = c;
-    }
-
-    private synchronized Connection getConnection() {
-        return conn;
-    }
 
     public NatsLossSubscriber(String server, String subject) {
         this.server = server;
@@ -111,10 +104,14 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
 
          @Override
         public Connection migrate(String url) throws Exception {
+            Connection oldConn;
+
             // Create a connection the the new server
             System.out.println("Connecting to server at:  " + url == null ? "locahost:4222" : url);
             Connection newConn = Nats.connect(getOptions(url));
-            Connection oldConn = getConnection();
+            synchronized (connLock) {
+                oldConn = conn;
+            }
 
             // create an additional queue subscriber to start load 
             // balancing on the new server.
@@ -131,7 +128,9 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
 
             // reassign the conn for use later in the program.  We synchronize
             // this to prevent race conditions.
-            setConnection(newConn); 
+            synchronized (connLock) {
+                conn = newConn;
+            }
             
             // drain the old connection, which will unsubscribe the 
             // old subscriber and then close it.  When the old subscriber 
@@ -175,7 +174,6 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
         Dispatcher d = nc.createDispatcher(msgHandler);
         d.subscribe(subject, qgroup);
         nc.flush(Duration.ofSeconds(5));
-        setConnection(nc);
         return nc;
     }
 
@@ -185,9 +183,8 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
         System.out.printf("Trying to connect to %s and listen to %s for messages.\n", server, subject);
         System.out.println();
 
-        connect(server);
-
-		new ControlPlane(conn, lmh, "subscriber");
+        conn = connect(server);
+        new ControlPlane(conn, lmh, "subscriber");
 
         // wait for the first message
         startLatch.await();
@@ -217,7 +214,9 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
         System.out.printf("Message Rate: %.2f msgs/sec\n", (double)finalCount / ((double)elapsed / (double)NANOSPERSEC));
         System.out.printf("Loss Percentage: %f\n", 100.0*((double)pubCount - (double)finalCount) / (double)pubCount);
 
-        getConnection().close();
+        synchronized (connLock) {
+            conn.close();
+        }
     }
 
     public static void main(String args[]) {

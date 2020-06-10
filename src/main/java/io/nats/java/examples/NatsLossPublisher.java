@@ -44,7 +44,7 @@ public class NatsLossPublisher implements ErrorListener, ConnectionListener {
             + "\nSet the environment variable NATS_CREDS to use JWT/NKey authentication by setting a file containing your user creds.\n"
             + "\nUse the URL for user/pass/token authentication.\n";
 
-    public void adjustAndSleep(int currentCount) throws InterruptedException {
+    public void simulateWorkDelay(int currentCount) throws InterruptedException {
 
         long elapsed = System.nanoTime() - startTime;
         double r = (double) currentCount / ((double) elapsed / (double) NANOSPERSEC);
@@ -179,7 +179,7 @@ public class NatsLossPublisher implements ErrorListener, ConnectionListener {
             for (int i = 0; i < count; i++) {
                 try {
                     publish(payload);
-                    adjustAndSleep(i+1);
+                    simulateWorkDelay(i+1);
                 } catch (final Exception e) {
                     System.out.println("Publish: Exception: " + e.getMessage());
                     e.printStackTrace();
