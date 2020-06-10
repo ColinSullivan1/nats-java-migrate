@@ -1,4 +1,4 @@
-// Copyright 2020 The NATS Authors
+// Copyright 2020 Colin Sullivan
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at:
@@ -23,7 +23,7 @@ import io.nats.client.Nats;
 import io.nats.client.Options;
 import io.nats.client.Consumer;
 
-public class NatsLossPublisher {
+public class NatsLossPublisher implements ErrorListener, ConnectionListener {
 
     private String subject;
     private int messageSize;
@@ -33,14 +33,7 @@ public class NatsLossPublisher {
     private long delay;
     private long startTime;
     private Connection conn;
-
-    private synchronized void setConnection(Connection c) {
-        conn = c;
-    }
-
-    private synchronized Connection getConnection() {
-        return conn;
-    }
+    private Object connLock = new Object();
 
     static final private int NANOSPERSEC = 1000000000;
     static final private int NANOSPERMS = NANOSPERSEC / 1000;
@@ -89,49 +82,46 @@ public class NatsLossPublisher {
         delay = NANOSPERSEC / count;
     }
 
-    private class Listeners implements ErrorListener, ConnectionListener {
+    @Override
+    public void errorOccurred(Connection conn, String error) {
+        System.err.println("NATS Error: " + error);
+    }
 
-        @Override
-        public void errorOccurred(Connection conn, String error) {
-            System.err.println("NATS Error: " + error);
-        }
+    @Override
+    public void exceptionOccurred(Connection conn, Exception exp) {
+        System.err.println("NATS Exception: " + exp.getMessage());
+    }
 
-        @Override
-        public void exceptionOccurred(Connection conn, Exception exp) {
-            System.err.println("NATS Exception: " + exp.getMessage());
-        }
+    @Override
+    public void slowConsumerDetected(Connection conn, Consumer consumer) {
+        System.out.println("NATS Slow consumer");
+    }
 
-        @Override
-        public void slowConsumerDetected(Connection conn, Consumer consumer) {
-            System.out.println("NATS Slow consumer");
-        }
+    @Override
+    public void connectionEvent(Connection conn, Events type) {
+        if (type == Events.CONNECTED || type == Events.DISCOVERED_SERVERS || type == Events.RESUBSCRIBED)
+           return;
 
-        @Override
-        public void connectionEvent(Connection conn, Events type) {
-            if (type == Events.CONNECTED || type == Events.DISCOVERED_SERVERS || type == Events.RESUBSCRIBED)
-                return;
-                
-            System.out.println("NATS Connection Event: " + type);
-        }
+        System.out.println("NATS Connection Event: " + type);
     }
 
     ControlPlane.MigrationHandler lmh = new ControlPlane.MigrationHandler() {
 
         @Override
         public Connection migrate(String url) throws Exception {
-           
+            Connection oldConn;
+
             // Create a connection the the new server
             Connection newConn = Nats.connect(getOptions(url));
-            Connection oldConn = getConnection();
-
-            // setting the connection to null will skip publishing
-            setConnection(null);
 
             // reassign the conn for use later in the program and to resume
-            // publishing
-            setConnection(newConn);
+            // publishing.  Ensure threadsafety.
+            synchronized (connLock) {
+                oldConn = conn;
+                conn = newConn;
+            }
            
-            // close the old connection
+            // drain the old connection
             try {
                 oldConn.drain(Duration.ofSeconds(5));
             }
@@ -151,7 +141,6 @@ public class NatsLossPublisher {
    };    
 
     public Options getOptions(String url) {
-        Listeners l = new Listeners();
         return new Options.Builder().
             server(url).
             connectionName("LossPublisher").
@@ -160,23 +149,28 @@ public class NatsLossPublisher {
             reconnectWait(Duration.ofSeconds(5)).
             reconnectBufferSize(messageSize * rate * 15). // tolerate 15s of publishing outage during reconnect.
             maxReconnects(1024).
-            errorListener(l).
-            connectionListener(l).
+            errorListener(this).
+            connectionListener(this).
             build();
+    }
+
+    private void publish(byte[] payload) {
+        synchronized (connLock) {
+            conn.publish(subject, payload);
+        }
     }
 
     public void Run() {
         try {
-            Connection nc = Nats.connect(getOptions(server));
-            setConnection(nc);
-            new ControlPlane(nc, lmh, "publisher");
+            conn = Nats.connect(getOptions(server));
+            new ControlPlane(conn, lmh, "publisher");
 
             System.out.println();
             System.out.printf("Sending %s messages of %d bytes on %s, server is %s\n", count, messageSize, subject, server);
             System.out.println();
 
             // send the expected count to the subscriber
-            nc.publish(subject, Integer.toString(count).getBytes(StandardCharsets.UTF_8));
+            publish(Integer.toString(count).getBytes(StandardCharsets.UTF_8));
 
             byte[] payload = new byte[messageSize];
 
@@ -184,15 +178,8 @@ public class NatsLossPublisher {
 
             for (int i = 0; i < count; i++) {
                 try {
-                    nc = getConnection();
-                    if (nc != null) {
-                        nc.publish(subject, payload);
-                        adjustAndSleep(i+1);
-                    } else {
-                        i--;
-                        Thread.sleep(250);
-                        System.out.println("publishing paused...");
-                    }
+                    publish(payload);
+                    adjustAndSleep(i+1);
                 } catch (final Exception e) {
                     System.out.println("Publish: Exception: " + e.getMessage());
                     e.printStackTrace();
@@ -202,10 +189,12 @@ public class NatsLossPublisher {
             long endTime = System.nanoTime();
 
             // publish null message as EOS (end of stream)
-            nc.publish(subject, null);
-            nc.flush(Duration.ofSeconds(2));
-            nc.close();
-
+            synchronized(connLock)
+            {
+                conn.publish(subject, null);
+                conn.flush(Duration.ofSeconds(2));
+                conn.close();
+            }
             System.out.println("Finished.");
 
             double seconds = (double)(endTime - startTime) / (double)NANOSPERSEC;
@@ -232,7 +221,7 @@ public class NatsLossPublisher {
         } else if (args.length == 0) {
             server = "nats://localhost:4222";
             count = 100000;
-            rate = 200;
+            rate = 10000;
             subject = "foo";
             messageSize = 128;
         } else {

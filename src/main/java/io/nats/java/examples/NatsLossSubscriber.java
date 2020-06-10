@@ -1,4 +1,4 @@
-// Copyright 2020 The NATS Authors
+// Copyright 2020 Colin Sullivan
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at:
@@ -30,7 +30,7 @@ import io.nats.client.MessageHandler;
 import io.nats.client.Nats;
 import io.nats.client.Options;
 
-public class NatsLossSubscriber {
+public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
 
     static final String usageString = "\nUsage: java NatsLossSubscriber [server] <subject>\n"
             + "\nUse tls:// or opentls:// to require tls, via the Default SSLContext\n"
@@ -63,29 +63,27 @@ public class NatsLossSubscriber {
         this.subject = subject;
     }
 
-    private class Listeners implements ErrorListener, ConnectionListener {
-        @Override
-        public void errorOccurred(Connection conn, String error) {
-            System.err.println("NATS Error: " + error);
-        }
+    @Override
+    public void errorOccurred(Connection conn, String error) {
+        System.err.println("NATS Error: " + error);
+    }
 
-        @Override
-        public void exceptionOccurred(Connection conn, Exception exp) {
-            System.err.println("NATS Exception: " + exp.getMessage());
-        }
+    @Override
+    public void exceptionOccurred(Connection conn, Exception exp) {
+        System.err.println("NATS Exception: " + exp.getMessage());
+    }
 
-        @Override
-        public void slowConsumerDetected(Connection conn, Consumer consumer) {
-            System.out.println("NATS Slow consumer");
-        }
+    @Override
+    public void slowConsumerDetected(Connection conn, Consumer consumer) {
+        System.out.println("NATS Slow consumer");
+    }
 
-        @Override
-        public void connectionEvent(Connection conn, Events type) {
-            if (type == Events.CONNECTED || type == Events.DISCOVERED_SERVERS || type == Events.RESUBSCRIBED)
-                return;
+    @Override
+    public void connectionEvent(Connection conn, Events type) {
+        if (type == Events.CONNECTED || type == Events.DISCOVERED_SERVERS || type == Events.RESUBSCRIBED)
+            return;
 
-            System.out.println("NATS Connection Event: " + type);
-        }
+        System.out.println("NATS Connection Event: " + type);
     }
 
     MessageHandler msgHandler = new MessageHandler() {
@@ -160,7 +158,6 @@ public class NatsLossSubscriber {
     };
 
     public Options getOptions(String url) {
-        Listeners l = new Listeners();
         return new Options.Builder().
             server(url).
             connectionName("LossSubscriber").
@@ -168,8 +165,8 @@ public class NatsLossSubscriber {
             pingInterval(Duration.ofSeconds(10)).
             reconnectWait(Duration.ofMillis(20)). // We want subscribers to reconnect before publishers.
             maxReconnects(1024).
-            errorListener(l).
-            connectionListener(l).
+            errorListener(this).
+            connectionListener(this).
             build();
     }
 
