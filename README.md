@@ -6,7 +6,7 @@ Examples for migrating java applications across NATS servers in a controlled man
 
 - Java 1.8 or higher
 - Gradle
-- The golang nats-req binary, found in the examples of the [nats.go]() repository
+- The golang nats-req binary, found in the examples of the [nats.go]() repository (or a substitute that sends a request message).
 - NATS server in your path
 
 ## Setup
