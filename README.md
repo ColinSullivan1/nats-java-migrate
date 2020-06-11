@@ -49,7 +49,7 @@ connection will be replaced.
 The publisher will simply create a new connection to the server it is migrating to, 
 swap the connection it's publishing on in a threadsafe manner and close the old one.
 
-## Test Flow Overview
+## Test Flow
 
 1) Start the servers (cluster of 2)
 2) Start the subscriber, connect to server #1
