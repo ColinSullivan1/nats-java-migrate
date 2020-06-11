@@ -45,7 +45,6 @@ public class ControlPlane {
             Connection nc = null;
             byte[] data = msg.getData();
             String url = (data.length == 0) ? "nats://localhost:4222" :  new String(data, StandardCharsets.UTF_8);
-            System.out.println("Migrate control message: " + tag + " migrating to " + url + ".");
     
             try {
                 nc = h.migrate(url);
