@@ -25,9 +25,9 @@ function stop_server_2 {
 }
 
 function migrate_applications {
-    nats-req control.migrate.subscriber "nats://127.0.0.1:$1"
+    scripts/request.sh control.migrate.subscriber "nats://127.0.0.1:$1" >/dev/null 2>&1
     sleep 1
-    nats-req control.migrate.publisher "nats://127.0.0.1:$1"
+    scripts/request.sh control.migrate.publisher "nats://127.0.0.1:$1" >/dev/null 2>&1
     sleep 1
 }
 
@@ -44,7 +44,7 @@ sleep 1
 # give some time for the apps to connect and publish messages
 sleep 2
 
-for (( i=1; i<=5; i++ ))
+for (( i=1; i<=3; i++ ))
 do
     # migrate to server #2
     echo "Migrating applications to server 2."

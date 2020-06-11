@@ -84,17 +84,17 @@ public class NatsLossPublisher implements ErrorListener, ConnectionListener {
 
     @Override
     public void errorOccurred(Connection conn, String error) {
-        System.err.println("NATS Error: " + error);
+        System.err.println("NATS Loss Publisher Error: " + error);
     }
 
     @Override
     public void exceptionOccurred(Connection conn, Exception exp) {
-        System.err.println("NATS Exception: " + exp.getMessage());
+        System.err.println("NATS Loss Publisher Exception: " + exp.getMessage());
     }
 
     @Override
     public void slowConsumerDetected(Connection conn, Consumer consumer) {
-        System.out.println("NATS Slow consumer");
+        System.out.println("NATS Loss Publisher Slow consumer");
     }
 
     @Override
@@ -102,7 +102,7 @@ public class NatsLossPublisher implements ErrorListener, ConnectionListener {
         if (type == Events.CONNECTED || type == Events.DISCOVERED_SERVERS || type == Events.RESUBSCRIBED)
            return;
 
-        System.out.println("NATS Connection Event: " + type);
+        System.out.println("NATS Loss Publisher Connection Event: " + type);
     }
 
     ControlPlane.MigrationHandler lmh = new ControlPlane.MigrationHandler() {

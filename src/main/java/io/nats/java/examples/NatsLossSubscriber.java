@@ -58,17 +58,17 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
 
     @Override
     public void errorOccurred(Connection conn, String error) {
-        System.err.println("NATS Error: " + error);
+        System.err.println("NATS Loss Subscriber Error: " + error);
     }
 
     @Override
     public void exceptionOccurred(Connection conn, Exception exp) {
-        System.err.println("NATS Exception: " + exp.getMessage());
+        System.err.println("NATS Loss Subscriber Exception: " + exp.getMessage());
     }
 
     @Override
     public void slowConsumerDetected(Connection conn, Consumer consumer) {
-        System.out.println("NATS Slow consumer");
+        System.out.println("NATS Loss Subscriber Slow consumer");
     }
 
     @Override
@@ -76,7 +76,7 @@ public class NatsLossSubscriber implements ErrorListener, ConnectionListener {
         if (type == Events.CONNECTED || type == Events.DISCOVERED_SERVERS || type == Events.RESUBSCRIBED)
             return;
 
-        System.out.println("NATS Connection Event: " + type);
+        System.out.println("NATS Loss Subscriber Connection Event: " + type);
     }
 
     MessageHandler msgHandler = new MessageHandler() {
