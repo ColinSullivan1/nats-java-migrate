@@ -57,14 +57,13 @@ swap the connection it's publishing on in a threadsafe manner and close the old 
 3) Start the publisher, connect to server #1
 4) Migrate the subscriber to server #1 (`nats-req control.migrate.subscriber "nats://<host>:port"`)
 5) Migrate the publisher (`nats-req control.migrate.publisher "nats://<host>:port"`)
-6) bounce server 1, simulating and upgrade.
+6) bounce server 1, simulating an upgrade.
 
 Repeat as necessary for testing.
 
-
 ## Running the test
 
-Various scripts are provided to assist testing these applications.
+Various scripts are provided to assist testing.
 
 - migrate_test.sh - a script that starts local servers, publisher, subscriber,
 and migrates between servers over the course of a minute.
